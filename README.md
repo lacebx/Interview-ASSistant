@@ -69,11 +69,13 @@ Then:
 | Step | Action | Purpose |
 |------|--------|---------|
 | 1 | Upload resume/projects | Build your knowledge index |
-| 2 | Press `[END]` | Activate listening mode |
+| 2 | Press `[END]`(hotekey) | Activate listening mode |
 | 3 | Interviewer speaks | Auto-transcribed via Web Speech API |
 | 4 | AI suggests answers | Pulled from your actual experience |
 | 5 | You paraphrase | Speak naturally, don't read verbatim |
-| 6 | Press `[SPACE]` (in mic tab) | Log your actual answer to history |
+| 6 | Press `[SPACE]`(hotekey) (in mic tab) | Log your actual answer to history |
+
+*FEEL FREE TO CUSTOMIZE HOTKEYS*
 
 ## Configuration
 
