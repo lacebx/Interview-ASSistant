@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interview Assistant</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0d1117;
+            color: #00ff41;
+            font-family: 'Segoe UI', monospace;
+            font-size: 16px;
+            line-height: 1.6;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #status-bar {
+            padding: 12px 20px;
+            background: #161b22;
+            border-bottom: 3px solid;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .paused { border-color: #ff4444; color: #ff4444; }
+        .active { border-color: #00ff41; color: #00ff41; }
+        
+        #upload-panel {
+            background: #21262d;
+            padding: 15px 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .upload-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .upload-btn {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .upload-btn:hover { background: #2ea043; }
+        
+        .file-status {
+            color: #8b949e;
+            font-size: 12px;
+        }
+        
+        .file-status.loaded { color: #3fb950; }
+        
+        #main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        #chat-history {
+            width: 35%;
+            border-right: 2px solid #30363d;
+            overflow-y: auto;
+            padding: 15px;
+            background: #0d1117;
+        }
+        
+        .chat-entry {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: #161b22;
+            border-radius: 8px;
+            border-left: 3px solid #58a6ff;
+        }
+        
+        .chat-entry:nth-child(even) { border-left-color: #238636; }
+        
+        .chat-question {
+            color: #58a6ff;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        
+        .chat-ai {
+            color: #c9d1d9;
+            font-size: 12px;
+            line-height: 1.4;
+            margin-bottom: 6px;
+            padding: 8px;
+            background: #21262d;
+            border-radius: 4px;
+            border-left: 2px solid #00ff41;
+        }
+        
+        .chat-ai-label {
+            color: #00ff41;
+            font-size: 10px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .chat-user {
+            color: #d29922;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 8px;
+            background: #21262d;
+            border-radius: 4px;
+            border-left: 2px solid #d29922;
+        }
+        
+        .chat-user-label {
+            color: #d29922;
+            font-size: 10px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        #current-area {
+            flex: 1;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        
+        #transcript {
+            color: #8b949e;
+            font-size: 14px;
+            margin-bottom: 20px;
+            min-height: 25px;
+            font-style: italic;
+        }
+        
+        #answer {
+            color: #00ff41;
+            font-weight: 500;
+            text-shadow: 0 0 10px rgba(0,255,65,0.3);
+            white-space: pre-wrap;
+            font-size: 26px;
+            line-height: 1.6;
+        }
+        
+        #answer ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        #answer li {
+            margin-bottom: 18px;
+            padding-left: 30px;
+            position: relative;
+            font-size: 26px;
+        }
+        
+        #answer li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #58a6ff;
+            font-size: 22px;
+        }
+        
+        .hint {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            color: #8b949e;
+            font-size: 11px;
+            background: #0d1117;
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: 1px solid #30363d;
+        }
+        
+        #clear-btn, #clear-kb-btn {
+            background: #da3633;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        
+        #clear-btn:hover, #clear-kb-btn:hover { background: #f85149; }
+        
+        .empty-state {
+            color: #484f58;
+            text-align: center;
+            padding: 30px;
+            font-style: italic;
+            font-size: 13px;
+        }
+        
+        input[type="file"] { display: none; }
+        
+        .tab-indicator {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background: #238636;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 5px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="tab-indicator">TAB 1: INTERVIEWER AUDIO</div>
+    
+    <div id="status-bar" class="paused" onclick="manualToggle()">
+        <span id="status-text">🔴 PAUSED - Press [END] to activate</span>
+        <div>
+            <span id="gen-status" style="margin-right: 15px;"></span>
+            <button id="clear-btn" onclick="clearHistory(event)">Clear Chat</button>
+        </div>
+    </div>
+    
+    <div id="upload-panel">
+        <div class="upload-group">
+            <label class="upload-btn">
+                📄 Upload Resume (PDF)
+                <input type="file" accept=".pdf,.txt" onchange="uploadFile(this, 'resume')">
+            </label>
+            <span id="resume-status" class="file-status">Not loaded</span>
+        </div>
+
+        <div class="upload-group">
+            <label class="upload-btn">
+                📋 Upload README (.md/.txt)
+                <input type="file" accept=".md,.txt,.rst" onchange="uploadFile(this, 'readme')">
+            </label>
+            <span id="readme-status" class="file-status">Not loaded</span>
+        </div>
+        
+        <div class="upload-group">
+            <label class="upload-btn">
+                📁 Upload Projects (DOCX)
+                <input type="file" accept=".docx,.doc,.txt" onchange="uploadFile(this, 'projects')">
+            </label>
+            <span id="projects-status" class="file-status">Not loaded</span>
+            <button id="clear-kb-btn" onclick="clearKnowledge(event)">Clear KB</button>
+        </div>
+    </div>
+    
+    <div id="main-container">
+        <div id="chat-history">
+            <div class="empty-state">No conversation yet. Upload your resume first!</div>
+        </div>
+        
+        <div id="current-area">
+            <div id="transcript">Click anywhere to start microphone...</div>
+            <div id="answer"></div>
+        </div>
+    </div>
+    
+    <div class="hint">END=toggle | Click bar=toggle | Open /mic in second tab</div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        const statusBar = document.getElementById('status-bar');
+        const statusText = document.getElementById('status-text');
+        const genStatus = document.getElementById('gen-status');
+        const transcriptDiv = document.getElementById('transcript');
+        const answerDiv = document.getElementById('answer');
+        const chatHistoryDiv = document.getElementById('chat-history');
+        const resumeStatus = document.getElementById('resume-status');
+        const projectsStatus = document.getElementById('projects-status');
+        const readmeStatus = document.getElementById('readme-status');
+        
+        let recognition;
+        let finalTranscript = '';
+        let silenceTimer;
+        let isProcessing = false;
+        let listeningEnabled = false;
+        let currentAnswer = '';
+        const SILENCE_THRESHOLD = 1000;
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'End') {
+                e.preventDefault();
+                socket.emit('toggle_request');
+            }
+        });
+        
+        function manualToggle() {
+            socket.emit('toggle_request');
+        }
+        
+        function clearHistory(e) {
+            e.stopPropagation();
+            if (confirm('Clear all chat history?')) {
+                socket.emit('clear_history');
+            }
+        }
+        
+        function clearKnowledge(e) {
+            e.stopPropagation();
+            if (confirm('Clear all knowledge base files?')) {
+                socket.emit('clear_knowledge');
+                resumeStatus.textContent = 'Not loaded';
+                resumeStatus.className = 'file-status';
+                projectsStatus.textContent = 'Not loaded';
+                projectsStatus.className = 'file-status';
+                readmeStatus.textContent = 'Not loaded';
+                readmeStatus.className = 'file-status';
+            }
+        }
+        
+        function uploadFile(input, type) {
+            if (!input.files.length) return;
+            
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('type', type);
+            
+            fetch('/upload', {method: 'POST', body: formData})
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`${type.toUpperCase()} uploaded: ${data.chars} characters`);
+                        if (type === 'resume') {
+                            resumeStatus.textContent = `✓ Loaded (${data.chars} chars)`;
+                            resumeStatus.className = 'file-status loaded';
+                        } else if (type === 'readme') {
+                            readmeStatus.textContent = `✓ Loaded (${data.chars} chars)`;
+                            readmeStatus.className = 'file-status loaded';
+                        } else if (type === 'projects') {
+                            projectsStatus.textContent = `✓ Loaded (${data.chars} chars)`;
+                            projectsStatus.className = 'file-status loaded';
+                        }
+                    }
+                })
+                .catch(err => alert('Upload failed: ' + err));
+        }
+        
+        socket.on('toggle', (data) => {
+            listeningEnabled = data.listening;
+            updateStatus();
+            if (listeningEnabled) {
+                transcriptDiv.textContent = '🎤 Listening for questions...';
+                answerDiv.textContent = '';
+                currentAnswer = '';
+            } else {
+                transcriptDiv.textContent = '⏸️ Paused - press [END] to activate';
+            }
+        });
+        
+        socket.on('answer_chunk', (data) => {
+            answerDiv.textContent += data.text;
+            currentAnswer += data.text;
+            genStatus.textContent = '⚡ Generating...';
+        });
+        
+        socket.on('error', (data) => {
+            console.error('Error:', data.message);
+            genStatus.textContent = '❌ Error';
+        });
+        
+        socket.on('history', (data) => {
+            renderHistory(data.history);
+        });
+        
+        socket.on('answer_logged', (data) => {
+            genStatus.textContent = '✓ Answer logged';
+            setTimeout(() => {
+                if (listeningEnabled) genStatus.textContent = '';
+            }, 2000);
+        });
+        
+        socket.on('knowledge_status', (data) => {
+            if (data.resume_loaded) {
+                resumeStatus.textContent = '✓ Loaded';
+                resumeStatus.className = 'file-status loaded';
+            }
+            if (data.readme_loaded) {
+                readmeStatus.textContent = '✓ Loaded';
+                readmeStatus.className = 'file-status loaded';
+            }   
+            if (data.projects_loaded) {
+                projectsStatus.textContent = '✓ Loaded';
+                projectsStatus.className = 'file-status loaded';
+            }
+        });
+        
+        function renderHistory(history) {
+            if (history.length === 0) {
+                chatHistoryDiv.innerHTML = '<div class="empty-state">No conversation yet. Start by asking a question!</div>';
+                return;
+            }
+            
+            chatHistoryDiv.innerHTML = history.map((entry, i) => {
+                const aiSuggestion = entry.model_suggestion || entry.answer || 'N/A';
+                const userAnswer = entry.your_actual_answer || '[Not logged yet]';
+                
+                return `
+                <div class="chat-entry">
+                    <div class="chat-question">Q${i+1}: ${escapeHtml(entry.interviewer_q || entry.question || 'N/A')}</div>
+                    <div class="chat-ai">
+                        <div class="chat-ai-label">AI Suggestion</div>
+                        ${escapeHtml(aiSuggestion)}
+                    </div>
+                    <div class="chat-user">
+                        <div class="chat-user-label">You Said</div>
+                        ${escapeHtml(userAnswer)}
+                    </div>
+                </div>
+            `}).join('');
+            
+            chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function updateStatus() {
+            if (listeningEnabled) {
+                statusBar.className = 'active';
+                statusText.textContent = '🟢 ACTIVE - Capturing audio (Press END to pause)';
+            } else {
+                statusBar.className = 'paused';
+                statusText.textContent = '🔴 PAUSED - Press [END] to activate';
+                genStatus.textContent = '';
+            }
+        }
+        
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            let isRestarting = false;
+   
+            recognition.onresult = (event) => {
+                if (!listeningEnabled) return;
+                
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                const currentText = (finalTranscript + interimTranscript).trim();
+                transcriptDiv.textContent = currentText;
+                
+                clearTimeout(silenceTimer);
+                
+                if (currentText.length > 10 && 
+                    (currentText.includes('?') || 
+                     (event.results[event.results.length-1].isFinal && currentText.length > 15))) {
+                    silenceTimer = setTimeout(() => {
+                        if (listeningEnabled && currentText.length > finalTranscript.length * 0.5) {
+                            sendQuestion(currentText);
+                        }
+                    }, SILENCE_THRESHOLD);
+                }
+            };
+            
+            recognition.onerror = (event) => {
+                if (event.error !== 'no-speech') {
+                    console.error('Speech error:', event.error);
+                }
+                isRestarting = false;
+            };
+    
+            recognition.onend = () => {
+                if (listeningEnabled && !isRestarting) {
+                    isRestarting = true;
+                    setTimeout(() => {
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                            console.log('Restart failed:', e);
+                        }
+                        isRestarting = false;
+                    }, 300);
+                }
+            };
+        } else {
+            alert('Use Chrome for speech recognition');
+        }
+        
+        function sendQuestion(text) {
+            if (isProcessing) return;
+            isProcessing = true;
+            answerDiv.textContent = '';
+            currentAnswer = '';
+            genStatus.textContent = '⚡ Processing...';
+            
+            socket.emit('question', { text: text });
+            
+            setTimeout(() => {
+                finalTranscript = '';
+                transcriptDiv.textContent = '';
+                isProcessing = false;
+                if (!listeningEnabled) {
+                    genStatus.textContent = '';
+                }
+            }, 10000);
+        }
+        
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#upload-panel') && !e.target.closest('#status-bar') && 
+                recognition && recognition.state !== 'running') {
+                try {
+                    recognition.start();
+                    transcriptDiv.textContent = 'Microphone active. Press [END] when ready.';
+                } catch (e) {
+                    console.log('Already started');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mic Capture - Interview Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0d1117;
+            color: #00ff41;
+            font-family: 'Segoe UI', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+        
+        #status {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .listening { color: #00ff41; text-shadow: 0 0 20px rgba(0,255,65,0.5); }
+        .idle { color: #8b949e; }
+        .sent { color: #58a6ff; }
+        
+        #transcript {
+            font-size: 24px;
+            color: #c9d1d9;
+            text-align: center;
+            min-height: 100px;
+            max-width: 800px;
+            line-height: 1.6;
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+        
+        #instruction {
+            font-size: 18px;
+            color: #8b949e;
+            text-align: center;
+            padding: 20px 40px;
+            border: 2px dashed #30363d;
+            border-radius: 10px;
+        }
+        
+        #instruction kbd {
+            background: #21262d;
+            padding: 5px 12px;
+            border-radius: 5px;
+            font-family: monospace;
+            color: #00ff41;
+            border: 1px solid #30363d;
+        }
+        
+        .pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        #waveform {
+            width: 300px;
+            height: 60px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        
+        .bar {
+            width: 6px;
+            background: #00ff41;
+            border-radius: 3px;
+            transition: height 0.1s ease;
+        }
+        
+        .bar.inactive { background: #30363d; }
+    </style>
+</head>
+<body>
+    <div id="waveform"></div>
+    
+    <div id="status" class="idle">🎤 Click to Start</div>
+    
+    <div id="transcript">Waiting to capture your answer...</div>
+    
+    <div id="instruction">
+        Press <kbd>SPACE</kbd> to send your answer to history
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        const statusDiv = document.getElementById('status');
+        const transcriptDiv = document.getElementById('transcript');
+        const waveformDiv = document.getElementById('waveform');
+        
+        let recognition;
+        let finalTranscript = '';
+        let interimTranscript = '';
+        let isRecording = false;
+        
+        // Create waveform bars
+        for (let i = 0; i < 20; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar inactive';
+            bar.style.height = '10px';
+            waveformDiv.appendChild(bar);
+        }
+        
+        const bars = document.querySelectorAll('.bar');
+        
+        function animateWaveform(active) {
+            bars.forEach((bar, i) => {
+                if (active) {
+                    bar.classList.remove('inactive');
+                    const height = Math.random() * 50 + 10;
+                    bar.style.height = height + 'px';
+                } else {
+                    bar.classList.add('inactive');
+                    bar.style.height = '10px';
+                }
+            });
+        }
+        
+        let waveformInterval;
+        
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            
+            recognition.onresult = (event) => {
+                interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                const displayText = (finalTranscript + interimTranscript).trim();
+                transcriptDiv.textContent = displayText || 'Listening...';
+            };
+            
+            recognition.onerror = (event) => {
+                if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                    console.error('Speech error:', event.error);
+                    statusDiv.textContent = '⚠️ Error - Click to restart';
+                    statusDiv.className = 'idle';
+                }
+            };
+            
+            recognition.onend = () => {
+                if (isRecording) {
+                    // Auto-restart if still recording
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.log('Restart failed:', e);
+                    }
+                }
+            };
+        } else {
+            alert('Speech recognition not supported. Use Chrome.');
+        }
+        
+        function startRecording() {
+            if (!recognition) return;
+            
+            try {
+                recognition.start();
+                isRecording = true;
+                statusDiv.textContent = '🟢 LISTENING';
+                statusDiv.className = 'listening pulse';
+                transcriptDiv.textContent = 'Speak now...';
+                
+                waveformInterval = setInterval(() => animateWaveform(true), 100);
+                
+                // Reset after 2 seconds of visual feedback
+                setTimeout(() => statusDiv.classList.remove('pulse'), 2000);
+            } catch (e) {
+                console.log('Already started:', e);
+            }
+        }
+        
+        function sendAnswer() {
+            const fullText = (finalTranscript + interimTranscript).trim();
+            if (!fullText) return;
+            
+            // Send to server
+            socket.emit('log_answer', { text: fullText });
+            
+            // Visual feedback
+            statusDiv.textContent = '✓ SENT';
+            statusDiv.className = 'sent';
+            transcriptDiv.textContent = `"${fullText.substring(0, 100)}${fullText.length > 100 ? '...' : ''}"`;
+            
+            clearInterval(waveformInterval);
+            animateWaveform(false);
+            
+            // Reset after delay
+            setTimeout(() => {
+                finalTranscript = '';
+                interimTranscript = '';
+                statusDiv.textContent = '🟢 LISTENING';
+                statusDiv.className = 'listening';
+                transcriptDiv.textContent = 'Ready for next answer...';
+                waveformInterval = setInterval(() => animateWaveform(true), 100);
+            }, 2000);
+        }
+        
+        // SPACE key to send
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && isRecording) {
+                e.preventDefault();
+                sendAnswer();
+            }
+        });
+        
+        // Click to start
+        document.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording();
+            }
+        });
+        
+        // Socket events
+        socket.on('answer_logged', (data) => {
+            console.log('Logged:', data);
+        });
+    </script>
+</body>
+</html>
